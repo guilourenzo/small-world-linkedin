@@ -3,8 +3,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
-
-
 # Streamlit UI Elements to interact with the user
 st.sidebar.title("Network Configuration")
 network_size = st.sidebar.slider(
@@ -26,6 +24,10 @@ if default_button:
 # Carregando o dataset
 file_path = 'https://raw.githubusercontent.com/guilourenzo/small-world-linkedin/refs/heads/main/small_world_linkedin/data/simulated_linkedin_connections.csv'
 data = pd.read_csv(file_path)
+
+st.write("Sample Dataset")
+st.dataframe(data=data.head(20))
+
 
 # Criando um grafo com NetworkX baseado nos dados fornecidos
 graph = nx.from_pandas_edgelist(
