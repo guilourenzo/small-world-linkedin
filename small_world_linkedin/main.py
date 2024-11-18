@@ -4,36 +4,56 @@ import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
 
+
 # Streamlit UI Elements to interact with the user
 st.sidebar.title("Network Configuration")
 network_size = st.sidebar.slider(
-    "Select number of nodes", min_value=10, max_value=500, value=10, step=10
+    "Select number of nodes", min_value=10, max_value=1000, value=550, step=10
 )
-connection_prob = st.sidebar.slider(
-    "Select connection probability",
-    min_value=0.01,
-    max_value=1.0,
-    value=0.2,
-    step=0.01,
-)
+# connection_prob = st.sidebar.slider(
+#     "Select connection probability",
+#     min_value=0.01,
+#     max_value=1.0,
+#     value=0.2,
+#     step=0.01,
+# )
 
 top_k = st.sidebar.slider(
-    "Select top k most influential nodes", min_value=1, max_value=20, value=5, step=1
+    "Select top k most influential nodes", min_value=3, max_value=20, value=5, step=1
 )
 
 # Button to reset to default values
 default_button = st.sidebar.button("Reset to Default")
 if default_button:
-    network_size = 100
-    connection_prob = 0.05
+    network_size = 550
+    # connection_prob = 0.05
     top_k = 5
 
+
+# Carregando o dataset
+file_path = 'small_world_linkedin\data\simulated_linkedin_connections.csv'
+data = pd.read_csv(file_path)
+
+# Criando um grafo com NetworkX baseado nos dados fornecidos
+graph = nx.from_pandas_edgelist(
+    data.loc[:network_size],
+    source='Origem',
+    target='Destino',
+    edge_attr=['Conexões em Comum (Peso)', 'Tipo de Conexão', 'Empresa (Grupo)'],
+    create_using=nx.Graph()
+)
+
+# Adicionando atributos de peso às arestas
+for u, v, data in graph.edges(data=True):
+    data['weight'] = data['Conexões em Comum (Peso)']
+
+
 # Creating a graph with NetworkX based on user input
-graph = nx.erdos_renyi_graph(n=network_size, p=connection_prob)
+# graph = nx.erdos_renyi_graph(n=network_size, p=connection_prob)
 
 # Calculating Small-World Metrics
 avg_path_length = (
-    nx.average_shortest_path_length(graph)
+    nx.average_shortest_path_length(graph, weight='weight')
     if nx.is_connected(graph)
     else "Graph is not connected"
 )
