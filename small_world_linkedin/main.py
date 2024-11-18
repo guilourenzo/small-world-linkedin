@@ -147,3 +147,7 @@ with top_k_col:
     top_k_nodes = centrality_df.nlargest(top_k, "Score")
 
     st.write(top_k_nodes[["Node", "Score"]])
+
+st.markdown("---")
+st.caption("Projeto desenvolvido durante as aulas do curso SCX5002 - Sistemas Complexos I - EACH USP")
+st.caption("Autor: Guilherme Lourenço | Prof.: Camilo Rodrigues")
