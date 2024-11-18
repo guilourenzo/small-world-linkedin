@@ -52,10 +52,14 @@ st.title("Small-World Analysis of LinkedIn Connections")
 st.write("Sample Dataset created for analysis")
 st.dataframe(df.head(20))
 
-st.write(
-    f"Average Path Length: {avg_path_length if isinstance(avg_path_length, str) else round(avg_path_length, 3)}"
-)
-st.write(f"Clustering Coefficient: {round(clustering_coeff, 3)}")
+avg_path_col, clustering_col = st.columns(2)
+
+avg_path_col.metric("Average Path Length", avg_path_length if isinstance(avg_path_length, str) else round(avg_path_length, 3))
+clustering_col.metric("Clustering Coefficient", round(clustering_coeff, 3))
+# st.write(
+#     f"Average Path Length: {avg_path_length if isinstance(avg_path_length, str) else round(avg_path_length, 3)}"
+# )
+# st.write(f"Clustering Coefficient: {round(clustering_coeff, 3)}")
 
 # Calculating Degree Distribution to check for Scale-Free properties
 degrees = [degree for node, degree in graph.degree()]
