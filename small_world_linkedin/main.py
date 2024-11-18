@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
 
 # Streamlit UI Elements to interact with the user
 st.sidebar.title("Network Configuration")
@@ -18,22 +17,33 @@ connection_prob = st.sidebar.slider(
     step=0.01,
 )
 
+top_k = st.sidebar.slider(
+    "Select top k most influential nodes", min_value=1, max_value=20, value=5, step=1
+)
+
 # Button to reset to default values
 default_button = st.sidebar.button("Reset to Default")
 if default_button:
-    network_size = 10
-    connection_prob = 0.2
+    network_size = 100
+    connection_prob = 0.05
+    top_k = 5
 
 # Creating a graph with NetworkX based on user input
 graph = nx.erdos_renyi_graph(n=network_size, p=connection_prob)
 
 # Calculating Small-World Metrics
-avg_path_length = nx.average_shortest_path_length(graph) if nx.is_connected(graph) else "Graph is not connected"
+avg_path_length = (
+    nx.average_shortest_path_length(graph)
+    if nx.is_connected(graph)
+    else "Graph is not connected"
+)
 clustering_coeff = nx.average_clustering(graph)
 
 # Displaying metrics
 st.title("Small-World Analysis of LinkedIn Connections")
-st.write(f"Average Path Length: {avg_path_length if type(avg_path_length) == str else round(avg_path_length, 3)}")
+st.write(
+    f"Average Path Length: {avg_path_length if isinstance(avg_path_length, str) else round(avg_path_length, 3)}"
+)
 st.write(f"Clustering Coefficient: {round(clustering_coeff, 3)}")
 
 # Calculating Degree Distribution to check for Scale-Free properties
@@ -41,9 +51,24 @@ degrees = [degree for node, degree in graph.degree()]
 degree_count = np.bincount(degrees)
 degree_range = range(len(degree_count))
 
+# Creating Degree Distribution Graph with both bar and line chart
 fig_deg = go.Figure()
-fig_deg.add_trace(go.Scatter(x=list(degree_range), y=list(degree_count), mode='lines+markers'))
-fig_deg.update_layout(title="Degree Distribution of LinkedIn Connections", xaxis_title="Degree", yaxis_title="Count")
+fig_deg.add_trace(
+    go.Bar(x=list(degree_range), y=list(degree_count), name="Degree histogram")
+)
+fig_deg.add_trace(
+    go.Scatter(
+        x=list(degree_range),
+        y=list(degree_count),
+        mode="lines+markers",
+        name="Degree distribution",
+    )
+)
+fig_deg.update_layout(
+    title="Degree Distribution of LinkedIn Connections",
+    xaxis_title="Degree",
+    yaxis_title="Node count",
+)
 
 st.plotly_chart(fig_deg)
 
@@ -56,9 +81,22 @@ for e in graph.edges():
     ye += [pos[e[0]][1], pos[e[1]][1], None]
 
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=xe, y=ye, mode='lines', line=dict(color='lightblue'), hoverinfo='none'))
-fig.add_trace(go.Scatter(x=xn, y=yn, mode='markers', marker=dict(size=10, color='red'), text=list(graph.nodes()), hoverinfo='text'))
-fig.update_layout(title="Graph Representation of LinkedIn Connections", showlegend=False)
+fig.add_trace(
+    go.Scatter(x=xe, y=ye, mode="lines", line=dict(color="lightblue"), hoverinfo="none")
+)
+fig.add_trace(
+    go.Scatter(
+        x=xn,
+        y=yn,
+        mode="markers",
+        marker=dict(size=10, color="red"),
+        text=list(graph.nodes()),
+        hoverinfo="text",
+    )
+)
+fig.update_layout(
+    title="Graph Representation of LinkedIn Connections", showlegend=False
+)
 
 st.plotly_chart(fig)
 
@@ -69,11 +107,26 @@ eigenvector_centrality = nx.eigenvector_centrality(graph)
 
 # Displaying Centrality Measures
 st.subheader("Centrality Measures")
-centrality_df = pd.DataFrame({
-    'Node': list(graph.nodes()),
-    'Degree Centrality': [degree_centrality[node] for node in graph.nodes()],
-    'Betweenness Centrality': [betweenness_centrality[node] for node in graph.nodes()],
-    'Eigenvector Centrality': [eigenvector_centrality[node] for node in graph.nodes()]
-})
+centrality_df = pd.DataFrame(
+    {
+        "Node": list(graph.nodes()),
+        "Degree Centrality": [degree_centrality[node] for node in graph.nodes()],
+        "Betweenness Centrality": [
+            betweenness_centrality[node] for node in graph.nodes()
+        ],
+        "Eigenvector Centrality": [
+            eigenvector_centrality[node] for node in graph.nodes()
+        ],
+    }
+)
 
 st.write(centrality_df)
+
+# Displaying Top k Most Influential Nodes
+st.subheader(f"Top {top_k} Most Influential Nodes")
+centrality_df["Score"] = centrality_df[
+    ["Degree Centrality", "Betweenness Centrality", "Eigenvector Centrality"]
+].mean(axis=1)
+top_k_nodes = centrality_df.nlargest(top_k, "Score")
+
+st.write(top_k_nodes[["Node", "Score"]])
