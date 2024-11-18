@@ -5,11 +5,6 @@ import streamlit as st
 import numpy as np
 # Streamlit UI Elements to interact with the user
 st.sidebar.title("Network Configuration")
-network_size = st.sidebar.slider(
-    "Select number of nodes", min_value=10, max_value=1000, value=550, step=10
-)
-
-
 top_k = st.sidebar.slider(
     "Select top k most influential nodes", min_value=3, max_value=20, value=5, step=1
 )
@@ -17,21 +12,19 @@ top_k = st.sidebar.slider(
 # Button to reset to default values
 default_button = st.sidebar.button("Reset to Default")
 if default_button:
-    network_size = 550
     top_k = 5
 
 
 # Carregando o dataset
 file_path = 'https://raw.githubusercontent.com/guilourenzo/small-world-linkedin/refs/heads/main/small_world_linkedin/data/simulated_linkedin_connections.csv'
-data = pd.read_csv(file_path)
+df = pd.read_csv(file_path)
 
-st.write("Sample Dataset")
-st.dataframe(data=data.head(20))
+
 
 
 # Criando um grafo com NetworkX baseado nos dados fornecidos
 graph = nx.from_pandas_edgelist(
-    data.loc[:network_size],
+    df,
     source='Origem',
     target='Destino',
     edge_attr=['Conexões em Comum (Peso)', 'Tipo de Conexão', 'Empresa (Grupo)'],
@@ -56,6 +49,9 @@ clustering_coeff = nx.average_clustering(graph)
 
 # Displaying metrics
 st.title("Small-World Analysis of LinkedIn Connections")
+st.write("Sample Dataset created for analysis")
+st.dataframe(df.head(20))
+
 st.write(
     f"Average Path Length: {avg_path_length if isinstance(avg_path_length, str) else round(avg_path_length, 3)}"
 )
