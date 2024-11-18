@@ -14,7 +14,7 @@ connection_prob = st.sidebar.slider(
     "Select connection probability",
     min_value=0.01,
     max_value=1.0,
-    value=0.01,
+    value=0.2,
     step=0.01,
 )
 
@@ -22,7 +22,7 @@ connection_prob = st.sidebar.slider(
 default_button = st.sidebar.button("Reset to Default")
 if default_button:
     network_size = 10
-    connection_prob = 0.01
+    connection_prob = 0.2
 
 # Creating a graph with NetworkX based on user input
 graph = nx.erdos_renyi_graph(n=network_size, p=connection_prob)
@@ -33,8 +33,8 @@ clustering_coeff = nx.average_clustering(graph)
 
 # Displaying metrics
 st.title("Small-World Analysis of LinkedIn Connections")
-st.write(f"Average Path Length: {avg_path_length}")
-st.write(f"Clustering Coefficient: {clustering_coeff}")
+st.write(f"Average Path Length: {avg_path_length if type(avg_path_length) == str else round(avg_path_length, 3)}")
+st.write(f"Clustering Coefficient: {round(clustering_coeff, 3)}")
 
 # Calculating Degree Distribution to check for Scale-Free properties
 degrees = [degree for node, degree in graph.degree()]
