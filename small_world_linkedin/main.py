@@ -51,27 +51,6 @@ degrees = [degree for node, degree in graph.degree()]
 degree_count = np.bincount(degrees)
 degree_range = range(len(degree_count))
 
-# Creating Degree Distribution Graph with both bar and line chart
-fig_deg = go.Figure()
-fig_deg.add_trace(
-    go.Bar(x=list(degree_range), y=list(degree_count), name="Degree histogram")
-)
-fig_deg.add_trace(
-    go.Scatter(
-        x=list(degree_range),
-        y=list(degree_count),
-        mode="lines+markers",
-        name="Degree distribution",
-    )
-)
-fig_deg.update_layout(
-    title="Degree Distribution of LinkedIn Connections",
-    xaxis_title="Degree",
-    yaxis_title="Node count",
-)
-
-st.plotly_chart(fig_deg)
-
 # Visualizing the Graph with Plotly
 pos = nx.spring_layout(graph)
 xn, yn = zip(*[pos[k] for k in graph.nodes()])
@@ -100,33 +79,58 @@ fig.update_layout(
 
 st.plotly_chart(fig)
 
+# Creating Degree Distribution Graph with both bar and line chart
+fig_deg = go.Figure()
+fig_deg.add_trace(
+    go.Bar(x=list(degree_range), y=list(degree_count), name="Degree histogram")
+)
+fig_deg.add_trace(
+    go.Scatter(
+        x=list(degree_range),
+        y=list(degree_count),
+        mode="lines+markers",
+        name="Degree distribution",
+    )
+)
+fig_deg.update_layout(
+    title="Degree Distribution of LinkedIn Connections",
+    xaxis_title="Degree",
+    yaxis_title="Node count",
+)
+
+st.plotly_chart(fig_deg)
+
+
+centrality_col, top_k_col = st.columns(2)
 # Calculating Centrality Measures
 degree_centrality = nx.degree_centrality(graph)
 betweenness_centrality = nx.betweenness_centrality(graph)
 eigenvector_centrality = nx.eigenvector_centrality(graph)
 
-# Displaying Centrality Measures
-st.subheader("Centrality Measures")
-centrality_df = pd.DataFrame(
-    {
-        "Node": list(graph.nodes()),
-        "Degree Centrality": [degree_centrality[node] for node in graph.nodes()],
-        "Betweenness Centrality": [
-            betweenness_centrality[node] for node in graph.nodes()
-        ],
-        "Eigenvector Centrality": [
-            eigenvector_centrality[node] for node in graph.nodes()
-        ],
-    }
-)
+with centrality_col:
+    # Displaying Centrality Measures
+    st.subheader("Centrality Measures")
+    centrality_df = pd.DataFrame(
+        {
+            "Node": list(graph.nodes()),
+            "Degree Centrality": [degree_centrality[node] for node in graph.nodes()],
+            "Betweenness Centrality": [
+                betweenness_centrality[node] for node in graph.nodes()
+            ],
+            "Eigenvector Centrality": [
+                eigenvector_centrality[node] for node in graph.nodes()
+            ],
+        }
+    )
 
-st.write(centrality_df)
+    st.write(centrality_df)
 
-# Displaying Top k Most Influential Nodes
-st.subheader(f"Top {top_k} Most Influential Nodes")
-centrality_df["Score"] = centrality_df[
-    ["Degree Centrality", "Betweenness Centrality", "Eigenvector Centrality"]
-].mean(axis=1)
-top_k_nodes = centrality_df.nlargest(top_k, "Score")
+with top_k_col:
+    # Displaying Top k Most Influential Nodes
+    st.subheader(f"Top {top_k} Most Influential Nodes")
+    centrality_df["Score"] = centrality_df[
+        ["Degree Centrality", "Betweenness Centrality", "Eigenvector Centrality"]
+    ].mean(axis=1)
+    top_k_nodes = centrality_df.nlargest(top_k, "Score")
 
-st.write(top_k_nodes[["Node", "Score"]])
+    st.write(top_k_nodes[["Node", "Score"]])
