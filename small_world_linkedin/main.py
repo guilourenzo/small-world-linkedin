@@ -1,6 +1,9 @@
 import networkx as nx
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import numpy as np
+import matplotlib.pyplot as plt
 
 # Streamlit UI Elements to interact with the user
 st.sidebar.title("Network Configuration")
@@ -15,36 +18,34 @@ connection_prob = st.sidebar.slider(
     step=0.01,
 )
 
-k_nearest_node = st.sidebar.slider(
-    "Select how many near nodes shall be connected ",
-    min_value=2,
-    max_value=50,
-    value=2,
-    step=1,
-)
-
 # Button to reset to default values
 default_button = st.sidebar.button("Reset to Default")
 if default_button:
     network_size = 10
     connection_prob = 0.01
-    k_nearest_node = 2
 
 # Creating a graph with NetworkX based on user input
-graph = nx.watts_strogatz_graph(n=network_size, p=connection_prob, k=k_nearest_node)
+graph = nx.erdos_renyi_graph(n=network_size, p=connection_prob)
 
 # Calculating Small-World Metrics
-avg_path_length = (
-    nx.average_shortest_path_length(graph)
-    if nx.is_connected(graph)
-    else "Graph is not connected"
-)
+avg_path_length = nx.average_shortest_path_length(graph) if nx.is_connected(graph) else "Graph is not connected"
 clustering_coeff = nx.average_clustering(graph)
 
 # Displaying metrics
 st.title("Small-World Analysis of LinkedIn Connections")
-st.write(f"Average Path Length: {avg_path_length if type(avg_path_length) == str else round(avg_path_length, 3)}")
-st.write(f"Clustering Coefficient: {round(clustering_coeff, 3)}")
+st.write(f"Average Path Length: {avg_path_length}")
+st.write(f"Clustering Coefficient: {clustering_coeff}")
+
+# Calculating Degree Distribution to check for Scale-Free properties
+degrees = [degree for node, degree in graph.degree()]
+degree_count = np.bincount(degrees)
+degree_range = range(len(degree_count))
+
+fig_deg = go.Figure()
+fig_deg.add_trace(go.Scatter(x=list(degree_range), y=list(degree_count), mode='lines+markers'))
+fig_deg.update_layout(title="Degree Distribution of LinkedIn Connections", xaxis_title="Degree", yaxis_title="Count")
+
+st.plotly_chart(fig_deg)
 
 # Visualizing the Graph with Plotly
 pos = nx.spring_layout(graph)
@@ -55,21 +56,24 @@ for e in graph.edges():
     ye += [pos[e[0]][1], pos[e[1]][1], None]
 
 fig = go.Figure()
-fig.add_trace(
-    go.Scatter(x=xe, y=ye, mode="lines", line=dict(color="lightblue"), hoverinfo="none")
-)
-fig.add_trace(
-    go.Scatter(
-        x=xn,
-        y=yn,
-        mode="markers",
-        marker=dict(size=10, color="red"),
-        text=list(graph.nodes()),
-        hoverinfo="text",
-    )
-)
-fig.update_layout(
-    title="Graph Representation of LinkedIn Connections", showlegend=False
-)
+fig.add_trace(go.Scatter(x=xe, y=ye, mode='lines', line=dict(color='lightblue'), hoverinfo='none'))
+fig.add_trace(go.Scatter(x=xn, y=yn, mode='markers', marker=dict(size=10, color='red'), text=list(graph.nodes()), hoverinfo='text'))
+fig.update_layout(title="Graph Representation of LinkedIn Connections", showlegend=False)
 
 st.plotly_chart(fig)
+
+# Calculating Centrality Measures
+degree_centrality = nx.degree_centrality(graph)
+betweenness_centrality = nx.betweenness_centrality(graph)
+eigenvector_centrality = nx.eigenvector_centrality(graph)
+
+# Displaying Centrality Measures
+st.subheader("Centrality Measures")
+centrality_df = pd.DataFrame({
+    'Node': list(graph.nodes()),
+    'Degree Centrality': [degree_centrality[node] for node in graph.nodes()],
+    'Betweenness Centrality': [betweenness_centrality[node] for node in graph.nodes()],
+    'Eigenvector Centrality': [eigenvector_centrality[node] for node in graph.nodes()]
+})
+
+st.write(centrality_df)
