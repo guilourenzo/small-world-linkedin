@@ -15,14 +15,23 @@ connection_prob = st.sidebar.slider(
     step=0.01,
 )
 
+k_nearest_node = st.sidebar.slider(
+    "Select how many near nodes shall be connected ",
+    min_value=2,
+    max_value=50,
+    value=2,
+    step=1,
+)
+
 # Button to reset to default values
 default_button = st.sidebar.button("Reset to Default")
 if default_button:
     network_size = 10
     connection_prob = 0.01
+    k_nearest_node = 2
 
 # Creating a graph with NetworkX based on user input
-graph = nx.erdos_renyi_graph(n=network_size, p=connection_prob)
+graph = nx.watts_strogatz_graph(n=network_size, p=connection_prob, k=k_nearest_node)
 
 # Calculating Small-World Metrics
 avg_path_length = (
