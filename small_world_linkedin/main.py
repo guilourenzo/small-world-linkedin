@@ -10,13 +10,7 @@ st.sidebar.title("Network Configuration")
 network_size = st.sidebar.slider(
     "Select number of nodes", min_value=10, max_value=1000, value=550, step=10
 )
-# connection_prob = st.sidebar.slider(
-#     "Select connection probability",
-#     min_value=0.01,
-#     max_value=1.0,
-#     value=0.2,
-#     step=0.01,
-# )
+
 
 top_k = st.sidebar.slider(
     "Select top k most influential nodes", min_value=3, max_value=20, value=5, step=1
@@ -26,12 +20,11 @@ top_k = st.sidebar.slider(
 default_button = st.sidebar.button("Reset to Default")
 if default_button:
     network_size = 550
-    # connection_prob = 0.05
     top_k = 5
 
 
 # Carregando o dataset
-file_path = 'small_world_linkedin\data\simulated_linkedin_connections.csv'
+file_path = 'https://raw.githubusercontent.com/guilourenzo/small-world-linkedin/refs/heads/main/small_world_linkedin/data/simulated_linkedin_connections.csv'
 data = pd.read_csv(file_path)
 
 # Criando um grafo com NetworkX baseado nos dados fornecidos
