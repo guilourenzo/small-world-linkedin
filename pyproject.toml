@@ -14,6 +14,9 @@ streamlit = "^1.40.1"
 matplotlib = "^3.9.2"
 scipy = "^1.14.1"
 nbformat = "^5.10.4"
+selenium = "^4.27.1"
+python-dotenv = "^1.0.1"
+webdriver-manager = "^4.0.2"
 
 
 [build-system]
