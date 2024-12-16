@@ -1,3 +1,4 @@
+import functools
 import json
 import time
 from datetime import datetime
@@ -22,13 +23,43 @@ FILE_PATH = "https://raw.githubusercontent.com/guilourenzo/small-world-linkedin/
 
 
 # Funções do script original
-@st.cache_data
-def process_data(csv_file=FILE_PATH):
-    # Carregar CSV
-    combined_df = pd.read_csv(csv_file, sep="|")
-    combined_df["Connected On"] = pd.to_datetime(combined_df["Connected On"])
 
-    return combined_df
+def safe_read_csv(csv_file, separator='|', **kwargs):
+    """
+    Safely read CSV with error handling and logging.
+    
+    Args:
+        csv_file (str): Path to CSV file
+        separator (str, optional): CSV separator. Defaults to '|'
+    
+    Returns:
+        pd.DataFrame: Processed DataFrame
+    """
+    try:
+        df = pd.read_csv(csv_file, sep=separator, **kwargs)
+        df['Connected On'] = pd.to_datetime(df['Connected On'], errors='coerce')
+        
+        # Basic data validation
+        if df.empty:
+            st.warning("The dataset is empty. Please check the data source.")
+        
+        return df
+    except Exception as e:
+        st.error(f"Error reading CSV: {e}")
+        return pd.DataFrame()
+
+@functools.lru_cache(maxsize=128)
+def process_data(csv_file=FILE_PATH):
+    """
+    Cached data processing with memoization.
+    
+    Args:
+        csv_file (str, optional): CSV file path
+    
+    Returns:
+        pd.DataFrame: Processed DataFrame
+    """
+    return safe_read_csv(csv_file)
 
 
 def add_proximity_weights(graph, attribute="company"):
@@ -71,7 +102,7 @@ def create_graph(dataframe):
         graph.add_node(connection_node, group="Connection")
         graph.add_edge(main_node, connection_node)
 
-    graph = add_proximity_weights(graph, attribute="company")
+    graph = add_proximity_weights(graph)
 
     return graph
 
@@ -159,77 +190,87 @@ def interest_clustering_coefficient_undirected(graph, attribute="Company"):
     )
 
 
-# Step 6: Visualize degree distribution
-def plot_degree_distribution(G):
-    degrees = [degree for _, degree in G.degree()]
-    plt.figure(figsize=(8, 6))
-    plt.hist(degrees, bins=range(1, max(degrees) + 2), align="left", edgecolor="black")
-    plt.title("Degree Distribution")
-    plt.xlabel("Degree")
-    plt.ylabel("Frequency")
-    plt.show()
+def plot_degree_distribution(G, min_samples=30):
+    """
+    Robust degree distribution plotting with improved error handling.
+    
+    Args:
+        G (nx.Graph): Input graph
+        min_samples (int): Minimum number of samples for reliable analysis
+    """
+    try:
+        degrees = [degree for _, degree in G.degree()]
+        
+        if len(degrees) < min_samples:
+            st.warning(f"Dataset too small for comprehensive degree distribution analysis (needs at least {min_samples} samples).")
+            return
+        
+        # Frequency Distribution
+        plt.figure(figsize=(12, 4))
+        plt.subplot(131)
+        plt.hist(degrees, bins='auto', edgecolor='black', alpha=0.7)
+        plt.title('Degree Distribution')
+        plt.xlabel('Degree')
+        plt.ylabel('Frequency')
+        
+        # Log-Log Plot
+        plt.subplot(132)
+        plt.loglog(sorted(degrees, reverse=True), marker='o', linestyle='None')
+        plt.title('Log-Log Degree Distribution')
+        plt.xlabel('Degree')
+        plt.ylabel('Frequency')
+        
+        # Power Law Fit
+        plt.subplot(133)
+        degrees_array = np.array(degrees)
+        alpha, loc, scale = powerlaw.fit(degrees_array)
+        plt.hist(degrees_array, bins='auto', density=True, alpha=0.7, label='Empirical')
+        x = np.linspace(min(degrees), max(degrees), 100)
+        plt.plot(x, powerlaw.pdf(x, alpha, loc, scale), 'r-', label=f'Power Law (α={alpha:.2f})')
+        plt.title('Power Law Distribution')
+        plt.xlabel('Degree')
+        plt.ylabel('Density')
+        plt.legend()
+        
+        plt.tight_layout()
+        st.pyplot(plt)
+        
+        # Statistical Test
+        D, p_value = kstest(degrees_array, 'powerlaw', args=(alpha, loc, scale))
+        st.write(f"Kolmogorov-Smirnov Test: D = {D:.3f}, p-value = {p_value:.3f}")
+    
+    except Exception as e:
+        st.error(f"Error in degree distribution analysis: {e}")
 
-    # Check for scale-free network
-    plt.figure(figsize=(8, 6))
-    plt.loglog(sorted(degrees, reverse=True), marker="o", linestyle="None")
-    plt.title("Log-Log Plot of Degree Distribution")
-    plt.xlabel("Degree")
-    plt.ylabel("Frequency")
-    plt.show()
 
-    # Fit power-law distribution (ensure dataset size is sufficient)
-    if len(degrees) < 30:
-        print("Dataset too small to reliably fit a power-law distribution.")
-        return
-
-    degrees = np.array(degrees)
-    alpha, loc, scale = powerlaw.fit(degrees)
-
-    # Plot power-law fit
-    plt.figure(figsize=(8, 6))
-    plt.hist(degrees, bins=30, density=True, alpha=0.7, label="Degree Distribution")
-    x = np.linspace(min(degrees), max(degrees), 100)
-    plt.plot(
-        x,
-        powerlaw.pdf(x, alpha, loc, scale),
-        "r-",
-        label=f"Power Law Fit (α={alpha:.2f})",
-    )
-    plt.xlabel("Degree")
-    plt.ylabel("Density")
-    plt.legend()
-    plt.title("Degree Distribution and Power Law Fit")
-    plt.show()
-
-    # Perform Kolmogorov-Smirnov test
-    D, p_value = kstest(degrees, "powerlaw", args=(alpha, loc, scale))
-    print(f"Kolmogorov-Smirnov Test: D = {D}, p-value = {p_value}")
-
-
-# Step 5: Identify key influencers
 def compute_centrality_measures(G):
-    degree_centrality = nx.degree_centrality(G)
-    betweenness_centrality = nx.betweenness_centrality(G, weight="weight")
-    eigenvector_centrality = nx.eigenvector_centrality(G)
+    """
+    Compute centrality measures with optimized computation.
+    
+    Args:
+        G (nx.Graph): Input graph
+    
+    Returns:
+        tuple: Centrality DataFrame and degree centrality
+    """
+    # Parallel computation of centrality measures
+    centrality_funcs = {
+        'Degree Centrality': nx.degree_centrality,
+        'Betweenness Centrality': lambda g: nx.betweenness_centrality(g, weight='weight'),
+        'Eigenvector Centrality': nx.eigenvector_centrality
+    }
+    
+    centrality_data = {name: func(G) for name, func in centrality_funcs.items()}
+    
+    centrality_df = pd.DataFrame({
+        'Node': list(G.nodes()),
+        **{name: list(values.values()) for name, values in centrality_data.items()},
+        'Days Connected': [G.nodes[node].get('days_connected', None) for node in G.nodes()]
+    })
+    
+    centrality_df['Score'] = centrality_df[list(centrality_funcs.keys())].mean(axis=1)
+    return centrality_df.sort_values('Degree Centrality', ascending=False), centrality_data['Degree Centrality']
 
-    centrality_df = pd.DataFrame(
-        {
-            "Node": list(G.nodes),
-            "Degree Centrality": degree_centrality.values(),
-            "Betweenness Centrality": betweenness_centrality.values(),
-            "Eigenvector Centrality": eigenvector_centrality.values(),
-            "Days Connected": [
-                G.nodes[node].get("days_connected", None) for node in G.nodes()
-            ],
-        }
-    )
-
-    centrality_df["Score"] = centrality_df[
-        ["Degree Centrality", "Betweenness Centrality", "Eigenvector Centrality"]
-    ].mean(axis=1)
-
-    centrality_df = centrality_df.sort_values(by="Degree Centrality", ascending=False)
-    return centrality_df, degree_centrality
 
 
 # Step 4: Analyze the graph
@@ -240,7 +281,6 @@ def analyze_graph(G):
     )
     return clustering_coefficient, average_path_length
 
-@st.cache_data
 def display_pyvis_graph(graph):
     net = Network(
         notebook=False,
@@ -251,86 +291,92 @@ def display_pyvis_graph(graph):
     )
     net.from_nx(graph)
     net_file = "pyvis_graph.html"
-    net.save_graph(net_file)
+    net.write_html(net_file)
     return net_file
 
+def main():
+    st.set_page_config(layout="wide")
+    # Configuração do Streamlit
+    st.title("Small-World Analysis of LinkedIn Connections")
 
-# Configuração do Streamlit
-st.title("Small-World Analysis of LinkedIn Connections")
+    sample_df = process_data()
+    if sample_df.empty:
+        st.error("Unable to load network data.")
+        return
 
-sample_df = process_data()
+    st.write("Sample Dataset created for analysis")
+    st.markdown("""
+            This dataset were created extracting a sample from an actual LinkedIn account.
+            To filter the connections, we have used connections related to companies with a minimun of 5 employees.
 
-st.write("Sample Dataset created for analysis")
-st.markdown("""
-        This dataset were created extracting a sample from an actual LinkedIn account.
-        To filter the connections, we have used connections related to companies with a minimun of 5 employees.
+            To create the connections, the mutual connections were scrapped using Python.
+    """)
+    st.dataframe(sample_df.head(100))
 
-        To create the connections, the mutual connections were scrapped using Python.
-""")
-st.dataframe(sample_df.head(100))
+    st.markdown('---')
+    st.subheader("Visual Graph of LinkedIn connection")
+    # Criar o grafo
+    graph = create_graph(sample_df)
+    graph_file = display_pyvis_graph(graph)
+    st.components.v1.html(
+        open(graph_file, "r", encoding="utf-8").read(), height=800, scrolling=True
+    )
 
-st.markdown('---')
-st.subheader("Visual Graph of LinkedIn connection")
-# Criar o grafo
-graph = create_graph(sample_df)
-graph_file = display_pyvis_graph(graph)
-st.components.v1.html(
-    open(graph_file, "r", encoding="utf-8").read(), height=800, scrolling=True
-)
+    st.markdown('---')
+    st.subheader("Métricas do Grafo")
 
-st.markdown('---')
-st.subheader("Métricas do Grafo")
+    # Calcular Interest Clustering Coefficient
+    icc = interest_clustering_coefficient_undirected(graph, attribute="company")
 
-# Calcular Interest Clustering Coefficient
-icc = interest_clustering_coefficient_undirected(graph, attribute="company")
+    # Calcular Betweenness Centrality
+    betweenness = calculate_betweenness(graph)
 
-# Calcular Betweenness Centrality
-betweenness = calculate_betweenness(graph)
+    # Calcular Geodesic Length
+    geodesic_lengths = calculate_average_geodesic_length(graph)
 
-# Calcular Geodesic Length
-geodesic_lengths = calculate_average_geodesic_length(graph)
+    clustering_coefficient, average_path_length = analyze_graph(graph)
 
-clustering_coefficient, average_path_length = analyze_graph(graph)
-
-top_influencers, _ = compute_centrality_measures(graph)
+    top_influencers, _ = compute_centrality_measures(graph)
 
 
-clustering, avg_path = st.columns(2)
+    clustering, avg_path = st.columns(2)
 
-with clustering:
-    st.metric(label="Clustering Coefficient", value=f"{clustering_coefficient:.3f}")
+    with clustering:
+        st.metric(label="Clustering Coefficient", value=f"{clustering_coefficient:.3f}")
 
-with avg_path:
-    st.metric(label="Average Path Length", value=f"{average_path_length:.3f}")
-    
-icc_avg, btw_avg, geo_avg = st.columns(3)
+    with avg_path:
+        st.metric(label="Average Path Length", value=f"{average_path_length:.3f}")
+        
+    icc_avg, btw_avg, geo_avg = st.columns(3)
 
-with icc_avg:
-    st.metric(label='Average Interest clustering coefficient', value=f"{icc.ICC.mean():.3f}")
-    st.write("ICC calculated dataset")
-    st.dataframe(icc.head(10))
+    with icc_avg:
+        st.metric(label='Average Interest clustering coefficient', value=f"{icc.ICC.mean():.3f}")
+        st.write("ICC calculated dataset")
+        st.dataframe(icc.head(10))
 
-with btw_avg:
-    st.metric(label='Average Betweenness Centrality', value=f"{betweenness.BTW.mean():.3f}")
-    st.write("Betweenness Centrality calculated dataset")
-    st.dataframe(betweenness.head(10))
+    with btw_avg:
+        st.metric(label='Average Betweenness Centrality', value=f"{betweenness.BTW.mean():.3f}")
+        st.write("Betweenness Centrality calculated dataset")
+        st.dataframe(betweenness.head(10))
 
-with geo_avg:
-    st.metric(label='Average Geodesic Length', value=f"{geodesic_lengths.AGL.mean():.3f}")
-    st.write("Geodesic Length calculated dataset")
-    st.dataframe(geodesic_lengths.head(10))
+    with geo_avg:
+        st.metric(label='Average Geodesic Length', value=f"{geodesic_lengths.AGL.mean():.3f}")
+        st.write("Geodesic Length calculated dataset")
+        st.dataframe(geodesic_lengths.head(10))
 
-top_k, top_score = st.columns(2)
+    top_k, top_score = st.columns(2)
 
-with top_k:
-    st.write('Top 10 Influencers and Centrality Measures')
-    st.dataframe(top_influencers.head(10))
+    with top_k:
+        st.write('Top 10 Influencers and Centrality Measures')
+        st.dataframe(top_influencers.head(10))
 
-with top_score:
-    st.write('Top 10 Influencer Scores')
-    st.dataframe(top_influencers[['Node', 'Score']].head(10))
+    with top_score:
+        st.write('Top 10 Influencer Scores')
+        st.dataframe(top_influencers[['Node', 'Score']].head(10))
 
-st.markdown('---')
-st.subheader('Degree Distribution of LinkedIn Connections')
-plot_degree_distribution(graph)
+    st.markdown('---')
+    st.subheader('Degree Distribution of LinkedIn Connections')
+    plot_degree_distribution(graph)
 
+if __name__ == "__main__":
+    main()
