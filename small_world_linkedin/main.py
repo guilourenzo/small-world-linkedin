@@ -350,9 +350,9 @@ def main():
 
     st.write("Sample Dataset created for analysis")
     st.markdown("""
-            This dataset were created extracting a sample from an actual LinkedIn account.
-            To filter the connections, we have used connections related to companies with a minimun of 5 employees.
-
+            This dataset were created extracting a sample from an actual LinkedIn account.  
+            To filter the connections, we have used connections related to companies with a minimun of 5 employees.  
+  
             To create the connections, the mutual connections were scrapped using Python.
     """)
     st.dataframe(sample_df.head(100))
@@ -429,13 +429,13 @@ def main():
     st.markdown("---")
     st.subheader("Degree Distribution of LinkedIn Connections")
     st.markdown("""
-        The following visuals were created to help evaluate if the current graph has the 'Scale-free' property of a 'Small-world'.
+        The following visuals were created to help evaluate if the current graph has the 'Scale-free' property of a 'Small-world'.  
         
-        To evaluate that, we have 3 main Distributions:
-                1. Degree: shows the Degree histogram
-                2. Log-log: evaluates if the Degrees Distribuition follows a 'Scale-free' scale
-                3. Power-law: fits a Power-law and evaluates to evaluate if it follows a 'Scale-free' scale
-        
+        To evaluate that, we have 3 main Distributions:  
+                1. Degree: shows the Degree histogram  
+                2. Log-log: evaluates if the Degrees Distribuition follows a 'Scale-free' scale  
+                3. Power-law: fits a Power-law and evaluates to evaluate if it follows a 'Scale-free' scale  
+          
         Beyond the distributions, we have evaluated the 'Scale-free' using Kolmogorov-Smirnov Test.
         """)
     plot_degree_distribution(graph)
