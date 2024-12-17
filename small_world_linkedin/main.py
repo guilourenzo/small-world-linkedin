@@ -1,9 +1,5 @@
 import functools
-import json
-import time
-from datetime import datetime
 
-import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -12,50 +8,43 @@ import streamlit as st
 from pyvis.network import Network
 from scipy.stats import kstest, powerlaw
 
-# Configurações para exibir todas as linhas e colunas
-pd.set_option("display.max_rows", None)
-pd.set_option("display.max_columns", None)
-
-# Configuração para exibir todo o conteúdo das células
-pd.set_option("display.max_colwidth", None)
-
 FILE_PATH = "https://raw.githubusercontent.com/guilourenzo/small-world-linkedin/refs/heads/main/small_world_linkedin/data/linkedin_graph.csv"
 
 
 # Funções do script original
-
-def safe_read_csv(csv_file, separator='|', **kwargs):
+def safe_read_csv(csv_file, separator="|", **kwargs):
     """
     Safely read CSV with error handling and logging.
-    
+
     Args:
         csv_file (str): Path to CSV file
         separator (str, optional): CSV separator. Defaults to '|'
-    
+
     Returns:
         pd.DataFrame: Processed DataFrame
     """
     try:
         df = pd.read_csv(csv_file, sep=separator, **kwargs)
-        df['Connected On'] = pd.to_datetime(df['Connected On'], errors='coerce')
-        
+        df["Connected On"] = pd.to_datetime(df["Connected On"], errors="coerce")
+
         # Basic data validation
         if df.empty:
             st.warning("The dataset is empty. Please check the data source.")
-        
+
         return df
     except Exception as e:
         st.error(f"Error reading CSV: {e}")
         return pd.DataFrame()
 
+
 @functools.lru_cache(maxsize=128)
 def process_data(csv_file=FILE_PATH):
     """
     Cached data processing with memoization.
-    
+
     Args:
         csv_file (str, optional): CSV file path
-    
+
     Returns:
         pd.DataFrame: Processed DataFrame
     """
@@ -190,55 +179,96 @@ def interest_clustering_coefficient_undirected(graph, attribute="Company"):
     )
 
 
-def plot_degree_distribution(G, min_samples=30):
-    """
-    Robust degree distribution plotting with improved error handling.
-    
-    Args:
-        G (nx.Graph): Input graph
-        min_samples (int): Minimum number of samples for reliable analysis
-    """
+def plot_degree_distribution(graph, min_samples=30):
     try:
-        degrees = [degree for _, degree in G.degree()]
-        
+        degrees = [degree for _, degree in graph.degree()]
         if len(degrees) < min_samples:
-            st.warning(f"Dataset too small for comprehensive degree distribution analysis (needs at least {min_samples} samples).")
+            st.warning(
+                f"Dataset too small for comprehensive degree distribution analysis (needs at least {min_samples} samples)."
+            )
             return
-        
-        # Frequency Distribution
-        plt.figure(figsize=(12, 4))
-        plt.subplot(131)
-        plt.hist(degrees, bins='auto', edgecolor='black', alpha=0.7)
-        plt.title('Degree Distribution')
-        plt.xlabel('Degree')
-        plt.ylabel('Frequency')
-        
+
+        # Frequência dos graus
+        degree_counts = pd.Series(degrees).value_counts().sort_index()
+
+        # Gráfico de Distribuição
+        fig_hist = go.Figure()
+        fig_hist.add_trace(
+            go.Bar(
+                x=degree_counts.index,
+                y=degree_counts.values,
+                name="Degree Distribution",
+                marker=dict(color="blue"),
+            )
+        )
+        fig_hist.update_layout(
+            title="Degree Distribution",
+            xaxis_title="Degree",
+            yaxis_title="Frequency",
+            template="plotly_dark",
+        )
+
         # Log-Log Plot
-        plt.subplot(132)
-        plt.loglog(sorted(degrees, reverse=True), marker='o', linestyle='None')
-        plt.title('Log-Log Degree Distribution')
-        plt.xlabel('Degree')
-        plt.ylabel('Frequency')
-        
-        # Power Law Fit
-        plt.subplot(133)
+        fig_log = go.Figure()
+        fig_log.add_trace(
+            go.Scatter(
+                x=degree_counts.index,
+                y=degree_counts.values,
+                mode="markers+lines",
+                name="Log-Log Distribution",
+                line=dict(dash="dash"),
+                marker=dict(color="red", size=8),
+            )
+        )
+        fig_log.update_layout(
+            title="Log-Log Degree Distribution",
+            xaxis_title="Degree",
+            yaxis_title="Frequency",
+            yaxis_type="log",
+            xaxis_type="log",
+            template="plotly_dark",
+        )
+
+        # Power-Law Fit e Teste KS
         degrees_array = np.array(degrees)
         alpha, loc, scale = powerlaw.fit(degrees_array)
-        plt.hist(degrees_array, bins='auto', density=True, alpha=0.7, label='Empirical')
+        D, p_value = kstest(degrees_array, "powerlaw", args=(alpha, loc, scale))
+
+        # Gráfico Power-Law
+        fig_powerlaw = go.Figure()
         x = np.linspace(min(degrees), max(degrees), 100)
-        plt.plot(x, powerlaw.pdf(x, alpha, loc, scale), 'r-', label=f'Power Law (α={alpha:.2f})')
-        plt.title('Power Law Distribution')
-        plt.xlabel('Degree')
-        plt.ylabel('Density')
-        plt.legend()
-        
-        plt.tight_layout()
-        st.pyplot(plt)
-        
-        # Statistical Test
-        D, p_value = kstest(degrees_array, 'powerlaw', args=(alpha, loc, scale))
+        fig_powerlaw.add_trace(
+            go.Histogram(
+                x=degrees,
+                histnorm="probability density",
+                name="Empirical",
+                marker=dict(color="green"),
+            )
+        )
+        fig_powerlaw.add_trace(
+            go.Scatter(
+                x=x,
+                y=powerlaw.pdf(x, alpha, loc, scale),
+                mode="lines",
+                name=f"Power Law Fit (α={alpha:.2f})",
+                line=dict(color="red"),
+            )
+        )
+        fig_powerlaw.update_layout(
+            title="Power Law Distribution",
+            xaxis_title="Degree",
+            yaxis_title="Density",
+            template="plotly_dark",
+        )
+
+        # Exibir gráficos
+        st.plotly_chart(fig_hist)
+        st.plotly_chart(fig_log)
+        st.plotly_chart(fig_powerlaw)
+
+        st.write(f"Power Law Fit: α = {alpha:.2f}")
         st.write(f"Kolmogorov-Smirnov Test: D = {D:.3f}, p-value = {p_value:.3f}")
-    
+
     except Exception as e:
         st.error(f"Error in degree distribution analysis: {e}")
 
@@ -246,31 +276,38 @@ def plot_degree_distribution(G, min_samples=30):
 def compute_centrality_measures(G):
     """
     Compute centrality measures with optimized computation.
-    
+
     Args:
         G (nx.Graph): Input graph
-    
+
     Returns:
         tuple: Centrality DataFrame and degree centrality
     """
     # Parallel computation of centrality measures
     centrality_funcs = {
-        'Degree Centrality': nx.degree_centrality,
-        'Betweenness Centrality': lambda g: nx.betweenness_centrality(g, weight='weight'),
-        'Eigenvector Centrality': nx.eigenvector_centrality
+        "Degree Centrality": nx.degree_centrality,
+        "Betweenness Centrality": lambda g: nx.betweenness_centrality(
+            g, weight="weight"
+        ),
+        "Eigenvector Centrality": nx.eigenvector_centrality,
     }
-    
-    centrality_data = {name: func(G) for name, func in centrality_funcs.items()}
-    
-    centrality_df = pd.DataFrame({
-        'Node': list(G.nodes()),
-        **{name: list(values.values()) for name, values in centrality_data.items()},
-        'Days Connected': [G.nodes[node].get('days_connected', None) for node in G.nodes()]
-    })
-    
-    centrality_df['Score'] = centrality_df[list(centrality_funcs.keys())].mean(axis=1)
-    return centrality_df.sort_values('Degree Centrality', ascending=False), centrality_data['Degree Centrality']
 
+    centrality_data = {name: func(G) for name, func in centrality_funcs.items()}
+
+    centrality_df = pd.DataFrame(
+        {
+            "Node": list(G.nodes()),
+            **{name: list(values.values()) for name, values in centrality_data.items()},
+            "Days Connected": [
+                G.nodes[node].get("days_connected", None) for node in G.nodes()
+            ],
+        }
+    )
+
+    centrality_df["Score"] = centrality_df[list(centrality_funcs.keys())].mean(axis=1)
+    return centrality_df.sort_values(
+        "Degree Centrality", ascending=False
+    ), centrality_data["Degree Centrality"]
 
 
 # Step 4: Analyze the graph
@@ -281,7 +318,9 @@ def analyze_graph(G):
     )
     return clustering_coefficient, average_path_length
 
-def display_pyvis_graph(graph):
+
+@st.cache_data
+def display_pyvis_graph(_graph):
     net = Network(
         notebook=False,
         height="750px",
@@ -289,13 +328,18 @@ def display_pyvis_graph(graph):
         bgcolor="#222222",
         font_color="white",
     )
-    net.from_nx(graph)
-    net_file = "pyvis_graph.html"
+    net.from_nx(_graph)
+    net_file = "scx_graph.html"
     net.write_html(net_file)
     return net_file
 
+
 def main():
     st.set_page_config(layout="wide")
+    # Centralizar o conteúdo
+    st.markdown(
+        "<style>.css-1kyxreq {justify-content: center;}</style>", unsafe_allow_html=True
+    )
     # Configuração do Streamlit
     st.title("Small-World Analysis of LinkedIn Connections")
 
@@ -313,7 +357,7 @@ def main():
     """)
     st.dataframe(sample_df.head(100))
 
-    st.markdown('---')
+    st.markdown("---")
     st.subheader("Visual Graph of LinkedIn connection")
     # Criar o grafo
     graph = create_graph(sample_df)
@@ -321,9 +365,10 @@ def main():
     st.components.v1.html(
         open(graph_file, "r", encoding="utf-8").read(), height=800, scrolling=True
     )
+    # st.html(graph_file)
 
-    st.markdown('---')
-    st.subheader("Métricas do Grafo")
+    st.markdown("---")
+    st.subheader("Graph Evaluation Metrics")
 
     # Calcular Interest Clustering Coefficient
     icc = interest_clustering_coefficient_undirected(graph, attribute="company")
@@ -338,7 +383,6 @@ def main():
 
     top_influencers, _ = compute_centrality_measures(graph)
 
-
     clustering, avg_path = st.columns(2)
 
     with clustering:
@@ -346,37 +390,62 @@ def main():
 
     with avg_path:
         st.metric(label="Average Path Length", value=f"{average_path_length:.3f}")
-        
+
     icc_avg, btw_avg, geo_avg = st.columns(3)
 
     with icc_avg:
-        st.metric(label='Average Interest clustering coefficient', value=f"{icc.ICC.mean():.3f}")
+        st.metric(
+            label="Average Interest clustering coefficient",
+            value=f"{icc.ICC.mean():.3f}",
+        )
         st.write("ICC calculated dataset")
         st.dataframe(icc.head(10))
 
     with btw_avg:
-        st.metric(label='Average Betweenness Centrality', value=f"{betweenness.BTW.mean():.3f}")
+        st.metric(
+            label="Average Betweenness Centrality",
+            value=f"{betweenness.BTW.mean():.3f}",
+        )
         st.write("Betweenness Centrality calculated dataset")
         st.dataframe(betweenness.head(10))
 
     with geo_avg:
-        st.metric(label='Average Geodesic Length', value=f"{geodesic_lengths.AGL.mean():.3f}")
+        st.metric(
+            label="Average Geodesic Length", value=f"{geodesic_lengths.AGL.mean():.3f}"
+        )
         st.write("Geodesic Length calculated dataset")
         st.dataframe(geodesic_lengths.head(10))
 
     top_k, top_score = st.columns(2)
 
     with top_k:
-        st.write('Top 10 Influencers and Centrality Measures')
+        st.write("Top 10 Influencers and Centrality Measures")
         st.dataframe(top_influencers.head(10))
 
     with top_score:
-        st.write('Top 10 Influencer Scores')
-        st.dataframe(top_influencers[['Node', 'Score']].head(10))
+        st.write("Top 10 Influencer Scores")
+        st.dataframe(top_influencers[["Node", "Score"]].head(10))
 
-    st.markdown('---')
-    st.subheader('Degree Distribution of LinkedIn Connections')
+    st.markdown("---")
+    st.subheader("Degree Distribution of LinkedIn Connections")
+    st.markdown("""
+        The following visuals were created to help evaluate if the current graph has the 'Scale-free' property of a 'Small-world'.
+        
+        To evaluate that, we have 3 main Distributions:
+                1. Degree: shows the Degree histogram
+                2. Log-log: evaluates if the Degrees Distribuition follows a 'Scale-free' scale
+                3. Power-law: fits a Power-law and evaluates to evaluate if it follows a 'Scale-free' scale
+        
+        Beyond the distributions, we have evaluated the 'Scale-free' using Kolmogorov-Smirnov Test.
+        """)
     plot_degree_distribution(graph)
+
+    st.markdown("---")
+    st.caption(
+        "Projeto desenvolvido durante as aulas do curso SCX5002 - Sistemas Complexos I - EACH USP"
+    )
+    st.caption("Autor: Guilherme Lourenço | Prof.: Camilo Rodrigues")
+
 
 if __name__ == "__main__":
     main()
